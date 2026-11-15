@@ -1,0 +1,150 @@
+import AppKit
+import Foundation
+import SwiftUI
+
+#if DEBUG
+enum SelfTests {
+    private struct Failure: Error, CustomStringConvertible {
+        let description: String
+    }
+
+    private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
+        guard condition() else { throw Failure(description: message) }
+    }
+
+    static func run() {
+        do {
+            try testConfig()
+            try testConfigStore()
+            try testQueries()
+            try testStatuses()
+            try testDecoding()
+            try testArrayDecoding()
+            try testInvalidResponse()
+            try testArguments()
+            try testThemeAndShortcuts()
+            print("Self-tests passed")
+            exit(0)
+        } catch {
+            FileHandle.standardError.write(Data("Self-test failed: \(error)\n".utf8))
+            exit(1)
+        }
+    }
+
+    private static func testConfig() throws {
+        let json = ##"{"jql":"project = NOM AND sprint in openSprints()","limit":500,"site":"https://example.atlassian.net/","colors":{"accent":"#2F81F7"},"shortcuts":{"nextStory":["n"]}}"##
+        let config = try JSONDecoder().decode(JiraConfig.self, from: Data(json.utf8))
+        try expect(config.effectiveJQL == "project = NOM AND sprint in openSprints()", "Custom JQL")
+        try expect(config.effectiveLimit == 200, "Result limit is capped")
+        try expect(config.effectiveSite == "https://example.atlassian.net", "Site normalization")
+        try expect(JiraConfig(jql: " ", limit: 0, site: "not a URL", colors: nil, font: nil, shortcuts: nil).effectiveJQL == SprintConfig.defaultJQL,
+                   "Blank JQL restores the default")
+        try expect(JiraConfig(jql: nil, limit: 0, site: nil, colors: nil, font: nil, shortcuts: nil).effectiveLimit == 1,
+                   "Result limit has a positive lower bound")
+    }
+
+    private static func testConfigStore() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("config.json")
+        let config = try ConfigStore(url: url).load()
+        try expect(config.effectiveJQL == SprintConfig.defaultJQL, "Default config values")
+        try expect(FileManager.default.fileExists(atPath: url.path), "Default config creation")
+    }
+
+    private static func testQueries() throws {
+        let json = #"{"jql":"legacy = true","queries":[{"label":" Sprint ","jql":" sprint in openSprints() "},{"label":"Mine","jql":"assignee = currentUser()"},{"label":" ","jql":"invalid"}]}"#
+        let config = try JSONDecoder().decode(JiraConfig.self, from: Data(json.utf8))
+        try expect(config.effectiveQueries.count == 2, "Configured query tabs")
+        try expect(config.effectiveQueries[0].label == "Sprint" && config.effectiveQueries[0].jql == "sprint in openSprints()",
+                   "Query labels and JQL are trimmed")
+        let legacy = JiraConfig(jql: "legacy = true", limit: nil, site: nil, colors: nil, font: nil, shortcuts: nil)
+        try expect(legacy.effectiveQueries == [SprintQuery(label: "Current sprint", jql: "legacy = true")],
+                   "Legacy single-query config remains compatible")
+    }
+
+    private static func testStatuses() throws {
+        let config = JiraConfig(jql: nil, limit: nil, site: nil, colors: nil, font: nil, shortcuts: nil,
+                                statuses: [" To Do ", "Waiting for review", "to do", ""])
+        try expect(config.effectiveStatuses == ["To Do", "Waiting for review"], "Status config trims and deduplicates")
+        try expect(JiraConfig.standard.effectiveStatuses == SprintConfig.defaultStatuses, "Default status choices")
+        let choices = SprintConfig.statusChoices(configured: ["To Do", "In Progress"],
+                                                 available: ["Blocked", "to do"], current: "In Progress")
+        try expect(choices == ["To Do", "Blocked"], "Status picker excludes current and duplicate cached statuses")
+    }
+
+    private static func testDecoding() throws {
+        let json = """
+        {"issues":[{
+          "key":"NOM-123","self":"https://example.atlassian.net/rest/api/3/issue/123",
+          "fields":{
+            "summary":"Retry rejected invoices","status":{"name":"In Progress"},
+            "assignee":{"displayName":"Abel"},"issuetype":{"name":"Story"},
+            "priority":{"name":"High"}
+          }
+        },{
+          "key":"NOM-123","fields":{"summary":"Duplicate"}
+        }]}
+        """
+        let stories = try JiraClient.decodeSearch(Data(json.utf8))
+        guard let story = stories.first else { throw Failure(description: "Missing decoded story") }
+        try expect(stories.count == 1 && story.id == "NOM-123", "Stable identity and deduplication")
+        try expect(story.summary == "Retry rejected invoices" && story.status == "In Progress", "Summary and status")
+        try expect(story.assignee == "Abel" && story.issueType == "Story" && story.priority == "High", "People and type metadata")
+        try expect(story.browseURL?.absoluteString == "https://example.atlassian.net/browse/NOM-123", "Browse URL derived from API self URL")
+    }
+
+    private static func testArrayDecoding() throws {
+        let json = #"[{"key":"NOM-124","fields":{"summary":"Flat response","assignee":null}}]"#
+        let stories = try JiraClient.decodeSearch(Data(json.utf8), site: "https://example.atlassian.net")
+        try expect(stories.count == 1 && stories[0].assignee == "Unassigned", "Array response and unassigned fallback")
+        try expect(stories[0].browseURL?.absoluteString == "https://example.atlassian.net/browse/NOM-124", "Configured site fallback")
+        let empty = try JiraClient.decodeSearch(Data(#"{"workitems":[]}"#.utf8))
+        try expect(empty.isEmpty, "Work-item response envelope")
+    }
+
+    private static func testInvalidResponse() throws {
+        do {
+            _ = try JiraClient.decodeSearch(Data(#"{"error":"unauthorized"}"#.utf8))
+            throw Failure(description: "Malformed response should fail")
+        } catch JiraClient.ClientError.invalidResponse {
+            // Expected.
+        }
+    }
+
+    private static func testArguments() throws {
+        let arguments = JiraClient.searchArguments(jql: "sprint in openSprints()", limit: 100)
+        try expect(arguments == ["jira", "workitem", "search", "--jql", "sprint in openSprints()", "--limit", "100", "--json"],
+                   "acli search invocation")
+        try expect(JiraClient.assignArguments(key: "NOM-123") ==
+                   ["jira", "workitem", "assign", "--key", "NOM-123", "--assignee", "@me", "--yes", "--json"],
+                   "acli self-assignment invocation")
+        try expect(JiraClient.transitionArguments(key: "NOM-123", status: "In Review") ==
+                   ["jira", "workitem", "transition", "--key", "NOM-123", "--status", "In Review", "--yes", "--json"],
+                   "acli transition invocation")
+    }
+
+    private static func testThemeAndShortcuts() throws {
+        try expect(Color(sprintHex: "#0D1117") != nil, "RGB color parsing")
+        try expect(Color(sprintHex: "#FFFFFF80") != nil, "RGBA color parsing")
+        try expect(Color(sprintHex: "not-a-color") == nil, "Invalid color rejection")
+        Theme.applyFont("Geist Mono")
+        try expect(Theme.fontFamily == "Geist Mono", "Custom font family")
+        Theme.applyFont(" ")
+        try expect(Theme.fontFamily == "JetBrains Mono", "Blank font restores the default")
+        let upper = ShortcutBinding.parse("K")
+        try expect(upper?.key == "k" && upper?.shift == true, "Uppercase shortcut parsing")
+        let command = ShortcutBinding.parse("cmd-shift-o")
+        try expect(command?.key == "o" && command?.command == true && command?.shift == true, "Modified shortcut parsing")
+        let custom = ShortcutMap(overrides: ["nextStory": ["n"]])
+        try expect(custom.display(for: .nextStory) == "n" && custom.display(for: .previousStory) == "k",
+                   "Shortcut overrides preserve unspecified defaults")
+        try expect(custom.display(for: .nextQuery) == "l" && custom.display(for: .previousQuery) == "h",
+                   "Query navigation defaults")
+        try expect(custom.display(for: .tab1) == "1" && custom.display(for: .tab9) == "9",
+                   "Numbered query tab defaults")
+        try expect(custom.display(for: .actions) == "a" && custom.display(for: .openSelected) == "↵",
+                   "Action menu shortcut preserves browser opening defaults")
+    }
+}
+#endif

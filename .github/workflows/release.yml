@@ -1,0 +1,22 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build
+      - run: JIRA_SPRINT_SELF_TEST=1 .build/debug/JiraSprint
+      - name: Package universal app
+        run: ./scripts/package-release.sh "${GITHUB_REF_NAME#v}"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/Jira-Sprint-*.zip dist/Jira-Sprint-*.zip.sha256 --generate-notes

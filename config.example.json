@@ -1,0 +1,32 @@
+{
+  "queries": [
+    {
+      "label": "Sprint",
+      "jql": "sprint in openSprints() AND issuetype = Story ORDER BY rank ASC"
+    },
+    {
+      "label": "Mine",
+      "jql": "sprint in openSprints() AND issuetype = Story AND assignee = currentUser() ORDER BY rank ASC"
+    },
+    {
+      "label": "Blocked",
+      "jql": "sprint in openSprints() AND issuetype = Story AND status = Blocked ORDER BY rank ASC"
+    }
+  ],
+  "limit": 100,
+  "site": "https://example.atlassian.net",
+  "statuses": ["To Do", "In Progress", "In Review", "Blocked", "Done"],
+  "font": "JetBrains Mono",
+  "colors": {
+    "background": "#0D1117",
+    "accent": "#2F81F7"
+  },
+  "shortcuts": {
+    "nextStory": ["j", "down"],
+    "previousStory": ["k", "up"],
+    "nextQuery": ["l", "]"],
+    "previousQuery": ["h", "["],
+    "actions": ["a"],
+    "refresh": ["r", "cmd-r"]
+  }
+}
