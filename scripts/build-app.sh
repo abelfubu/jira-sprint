@@ -3,14 +3,16 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 APP="$ROOT/dist/Jira Sprint.app"
-BINARY="$ROOT/.build/release/JiraSprint"
 
 cd "$ROOT"
 if [ "${UNIVERSAL:-0}" = "1" ]; then
+  BUILD_DIR="$ROOT/.build/apple/Products/Release"
   swift build -c release --arch arm64 --arch x86_64
 else
+  BUILD_DIR="$ROOT/.build/release"
   swift build -c release
 fi
+BINARY="$BUILD_DIR/JiraSprint"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINARY" "$APP/Contents/MacOS/JiraSprint"
