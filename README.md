@@ -53,7 +53,20 @@ Build and open an ad-hoc-signed app bundle:
 
 The bundle is written to `dist/Jira Sprint.app`.
 
-For a distributable universal release, run `./scripts/package-release.sh 0.1.0` (universal packaging requires full Xcode; normal app builds only need Command Line Tools). This verifies the app signature and architectures, then writes `dist/Jira-Sprint-0.1.0.zip` and its SHA-256 checksum. Pushing a matching `v0.1.0` tag runs the release workflow, uploads both assets to GitHub, and dispatches an automatic version/checksum update to `abelfubu/homebrew-tap`. The tap validates and publishes the cask change without manual steps. See the [publishing documentation](https://github.com/abelfubu/gh-inbox/blob/main/docs/homebrew-publishing.md) for the required `HOMEBREW_TAP_TOKEN` Actions secret and manual fallback.
+For a distributable universal release, run `./scripts/package-release.sh 0.1.0` (universal packaging requires full Xcode; normal app builds only need Command Line Tools). This verifies the app signature and architectures, then writes `dist/Jira-Sprint-0.1.0.zip` and its SHA-256 checksum.
+
+## Create a release
+
+Commit and push your changes to `main`, then create and push an annotated semantic-version tag. The leading `v` is required; a tag such as `0.2.0` without it does not trigger publishing.
+
+```sh
+git switch main
+git pull origin main
+git tag -a v0.2.0 -m "Release v0.2.0"
+git push origin v0.2.0
+```
+
+The tag workflow builds and tests the universal app, publishes the GitHub release, and updates the `jira-sprint` Homebrew cask automatically. Use a new version for every release. See the [publishing documentation](https://github.com/abelfubu/gh-inbox/blob/main/docs/homebrew-publishing.md) for credentials, verification, and the manual fallback.
 
 ## App icon
 

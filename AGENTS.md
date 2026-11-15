@@ -24,4 +24,6 @@ JIRA_SPRINT_FORM_SMOKE=1 JIRA_SPRINT_DRY_RUN=1 .build/debug/JiraSprint
 JIRA_SPRINT_SCREENSHOT=/tmp/jira-sprint.png .build/debug/JiraSprint
 ```
 
+For version publishing, follow [Create a release](README.md#create-a-release) and the linked Homebrew publishing documentation. Only new `v<major>.<minor>.<patch>` tags trigger the GitHub release and automatic Homebrew cask update.
+
 All test hooks are DEBUG-only. Form smoke forces dry-run internally as defense in depth; never remove that guard or run mutation-flow tests without dry-run. Update `README.md` and `config.example.json` whenever behavior, shortcuts, or configuration changes.
