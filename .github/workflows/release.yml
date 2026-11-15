@@ -25,3 +25,12 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" dist/Jira-Sprint-*.zip dist/Jira-Sprint-*.zip.sha256 --generate-notes
           fi
+      - name: Request Homebrew cask update
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          gh api repos/abelfubu/homebrew-tap/dispatches \
+            --method POST \
+            -f event_type=update-cask \
+            -f "client_payload[cask]=jira-sprint" \
+            -f "client_payload[version]=${GITHUB_REF_NAME#v}"

@@ -53,7 +53,7 @@ Build and open an ad-hoc-signed app bundle:
 
 The bundle is written to `dist/Jira Sprint.app`.
 
-For a distributable universal release, run `./scripts/package-release.sh 0.1.0` (universal packaging requires full Xcode; normal app builds only need Command Line Tools). This verifies the app signature and architectures, then writes `dist/Jira-Sprint-0.1.0.zip` and its SHA-256 checksum. Pushing a matching `v0.1.0` tag runs the release workflow and uploads both assets to GitHub.
+For a distributable universal release, run `./scripts/package-release.sh 0.1.0` (universal packaging requires full Xcode; normal app builds only need Command Line Tools). This verifies the app signature and architectures, then writes `dist/Jira-Sprint-0.1.0.zip` and its SHA-256 checksum. Pushing a matching `v0.1.0` tag runs the release workflow, uploads both assets to GitHub, and dispatches an automatic version/checksum update to `abelfubu/homebrew-tap`. The tap validates and publishes the cask change without manual steps. See the [publishing documentation](https://github.com/abelfubu/gh-inbox/blob/main/docs/homebrew-publishing.md) for the required `HOMEBREW_TAP_TOKEN` Actions secret and manual fallback.
 
 ## App icon
 
