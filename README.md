@@ -32,6 +32,7 @@ acli jira workitem transition --help
 
 ```sh
 brew tap abelfubu/tap
+brew trust abelfubu/tap
 brew install --cask jira-sprint
 ```
 
