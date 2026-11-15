@@ -16,6 +16,11 @@ cd "$ROOT"
 APP_VERSION="$VERSION" UNIVERSAL=1 ./scripts/build-app.sh
 codesign --verify --deep --strict "$APP"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
+ACTUAL_VERSION=$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")
+if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
+  echo "Expected app version $VERSION, found $ACTUAL_VERSION" >&2
+  exit 1
+fi
 lipo -info "$APP/Contents/MacOS/JiraSprint" | grep 'arm64' | grep -q 'x86_64'
 
 rm -f "$ZIP" "$CHECKSUM"
