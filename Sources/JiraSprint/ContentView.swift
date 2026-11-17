@@ -522,25 +522,24 @@ private struct StoryRow: View {
                 .frame(width: 15)
                 .padding(.top, 3)
             VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Text(story.key)
                         .sprintFont(11, weight: .medium)
                         .foregroundStyle(Theme.muted)
-                    Text(story.summary)
-                        .sprintFont(12.5, weight: .light)
-                        .foregroundStyle(Theme.foreground)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                }
-                HStack(spacing: 8) {
                     chip(story.status, color: statusColor)
                     Text(story.assignee).foregroundStyle(Theme.muted)
                     if let priority = story.priority {
                         Text(priority).foregroundStyle(priorityColor(priority))
                     }
+                    Spacer(minLength: 0)
                 }
                 .sprintFont(10.5)
                 .lineLimit(1)
+                Text(story.summary)
+                    .sprintFont(12.5, weight: .light)
+                    .foregroundStyle(Theme.foreground)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
             }
             .textSelection(.enabled)
             Spacer(minLength: 0)
