@@ -147,7 +147,9 @@ struct ContentView: View {
                         let story = item.story
                         StoryRow(story: story, selected: story.key == store.selectedStoryKey,
                                  depth: item.depth, childCount: item.childCount, isExpanded: item.isExpanded,
-                                 showsDisclosure: item.showsDisclosure, isLoadingChildren: item.isLoadingChildren) {
+                                 showsDisclosure: SprintHierarchy.disclosureVisible(for: item,
+                                                                                     selected: story.key == store.selectedStoryKey),
+                                 isLoadingChildren: item.isLoadingChildren) {
                             store.selectStory(story)
                         } toggleFold: {
                             store.toggleFold(story)

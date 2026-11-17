@@ -29,6 +29,10 @@ struct SprintListItem: Identifiable, Equatable, Sendable {
 }
 
 enum SprintHierarchy {
+    static func disclosureVisible(for item: SprintListItem, selected: Bool) -> Bool {
+        item.showsDisclosure && (selected || item.childCount > 0 || item.isLoadingChildren)
+    }
+
     static func scopedChildren(keys: [String], stories: [Story]) -> [Story] {
         let candidates = Dictionary(stories.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
         var seen: Set<String> = []

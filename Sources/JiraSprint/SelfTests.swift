@@ -155,8 +155,16 @@ enum SelfTests {
         let checkedEmpty = SprintHierarchy.rows(stories: [story("EMPTY-1")], expandedParents: [],
                                                 loadedParents: ["EMPTY-1"], loadingParents: [])
         try expect(uncheckedEmpty[0].showsDisclosure, "Unchecked parents can be expanded")
+        try expect(!SprintHierarchy.disclosureVisible(for: uncheckedEmpty[0], selected: false),
+                   "Unchecked unselected rows do not clutter the list with chevrons")
+        try expect(SprintHierarchy.disclosureVisible(for: uncheckedEmpty[0], selected: true),
+                   "Selected unchecked rows expose their disclosure control")
+        try expect(SprintHierarchy.disclosureVisible(for: collapsed[0], selected: false),
+                   "Confirmed parents always expose their disclosure control")
         try expect(!checkedEmpty[0].showsDisclosure && checkedEmpty[0].childCount == 0,
                    "Checked parents with zero subtasks hide their disclosure chevron")
+        try expect(!SprintHierarchy.disclosureVisible(for: checkedEmpty[0], selected: true),
+                   "Selection does not resurrect a checked-empty chevron")
 
         let expanded = SprintHierarchy.rows(stories: source, expandedParents: ["P-1"],
                                             loadedParents: ["P-1", "P-2"], loadingParents: [])
