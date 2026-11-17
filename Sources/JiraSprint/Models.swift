@@ -29,8 +29,8 @@ struct SprintListItem: Identifiable, Equatable, Sendable {
 }
 
 enum SprintHierarchy {
-    static func disclosureVisible(for item: SprintListItem, selected: Bool) -> Bool {
-        item.showsDisclosure && (selected || item.childCount > 0 || item.isLoadingChildren)
+    static func disclosureVisible(for item: SprintListItem) -> Bool {
+        item.childCount > 0
     }
 
     static func scopedChildren(keys: [String], stories: [Story]) -> [Story] {

@@ -155,16 +155,14 @@ enum SelfTests {
         let checkedEmpty = SprintHierarchy.rows(stories: [story("EMPTY-1")], expandedParents: [],
                                                 loadedParents: ["EMPTY-1"], loadingParents: [])
         try expect(uncheckedEmpty[0].showsDisclosure, "Unchecked parents can be expanded")
-        try expect(!SprintHierarchy.disclosureVisible(for: uncheckedEmpty[0], selected: false),
-                   "Unchecked unselected rows do not clutter the list with chevrons")
-        try expect(SprintHierarchy.disclosureVisible(for: uncheckedEmpty[0], selected: true),
-                   "Selected unchecked rows expose their disclosure control")
-        try expect(SprintHierarchy.disclosureVisible(for: collapsed[0], selected: false),
-                   "Confirmed parents always expose their disclosure control")
+        try expect(!SprintHierarchy.disclosureVisible(for: uncheckedEmpty[0]),
+                   "Unchecked rows never show speculative chevrons")
+        try expect(SprintHierarchy.disclosureVisible(for: collapsed[0]),
+                   "Confirmed parents expose their disclosure control")
         try expect(!checkedEmpty[0].showsDisclosure && checkedEmpty[0].childCount == 0,
                    "Checked parents with zero subtasks hide their disclosure chevron")
-        try expect(!SprintHierarchy.disclosureVisible(for: checkedEmpty[0], selected: true),
-                   "Selection does not resurrect a checked-empty chevron")
+        try expect(!SprintHierarchy.disclosureVisible(for: checkedEmpty[0]),
+                   "Checked-empty rows remain without a chevron")
 
         let expanded = SprintHierarchy.rows(stories: source, expandedParents: ["P-1"],
                                             loadedParents: ["P-1", "P-2"], loadingParents: [])
@@ -216,6 +214,9 @@ enum SelfTests {
         let arguments = JiraClient.searchArguments(jql: "sprint in openSprints()", limit: 100)
         try expect(arguments == ["jira", "workitem", "search", "--jql", "sprint in openSprints()", "--limit", "100", "--json"],
                    "acli search invocation")
+        try expect(JiraClient.subtaskArguments(parentKey: "NOM-123") ==
+                   ["jira", "workitem", "view", "NOM-123", "--fields", "subtasks", "--json"],
+                   "acli subtask metadata invocation")
         try expect(JiraClient.assignArguments(key: "NOM-123") ==
                    ["jira", "workitem", "assign", "--key", "NOM-123", "--assignee", "@me", "--yes", "--json"],
                    "acli self-assignment invocation")

@@ -27,6 +27,7 @@ final class SprintStore: ObservableObject {
     private var expandedByQuery: [Int: Set<String>] = [:]
     private var loadedParentsByQuery: [Int: Set<String>] = [:]
     private var loadingParentsByQuery: [Int: Set<String>] = [:]
+    private var pendingParentsByQuery: [Int: [String]] = [:]
     private var childTasks: [String: Task<Void, Never>] = [:]
     private var childTaskTokens: [String: UUID] = [:]
     private var requestLimit = 100
@@ -94,6 +95,7 @@ final class SprintStore: ObservableObject {
         childTasks.values.forEach { $0.cancel() }
         childTasks.removeAll()
         childTaskTokens.removeAll()
+        pendingParentsByQuery.removeAll()
     }
 
     func refresh(preservingNotice: Bool = false) {
@@ -348,6 +350,33 @@ final class SprintStore: ObservableObject {
         }
     }
 
+    func prepareChildren(for story: Story) {
+        guard !story.isSubtask else { return }
+        #if DEBUG
+        if fixtureMode { return }
+        #endif
+        let queryIndex = selectedQueryIndex
+        guard loadedParentsByQuery[queryIndex]?.contains(story.key) != true else { return }
+        var pending = pendingParentsByQuery[queryIndex] ?? []
+        if !pending.contains(story.key) { pending.append(story.key) }
+        pendingParentsByQuery[queryIndex] = pending
+        drainChildQueue(queryIndex: queryIndex)
+    }
+
+    private func drainChildQueue(queryIndex: Int) {
+        guard queries.indices.contains(queryIndex) else { return }
+        var pending = pendingParentsByQuery[queryIndex] ?? []
+        pending.removeAll { loadedParentsByQuery[queryIndex]?.contains($0) == true }
+        pendingParentsByQuery[queryIndex] = pending
+        guard !pending.isEmpty else { return }
+        let prefix = "\(queryIndex):"
+        let activeCount = childTasks.keys.filter { $0.hasPrefix(prefix) }.count
+        guard activeCount < 3 else { return }
+        let parentKey = pending.removeFirst()
+        pendingParentsByQuery[queryIndex] = pending
+        loadChildren(parentKey: parentKey, queryIndex: queryIndex)
+    }
+
     func toggleFold(_ story: Story? = nil) {
         guard let target = story ?? selectedStory else { return }
         let queryIndex = selectedQueryIndex
@@ -386,6 +415,7 @@ final class SprintStore: ObservableObject {
         childTaskTokens[id] = token
         loadingParentsByQuery[queryIndex, default: []].insert(parentKey)
         if selectedQueryIndex == queryIndex { rebuildRows() }
+        pendingParentsByQuery[queryIndex]?.removeAll { $0 == parentKey }
         childTasks[id] = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -393,6 +423,7 @@ final class SprintStore: ObservableObject {
                     self.loadingParentsByQuery[queryIndex]?.remove(parentKey)
                     self.childTasks[id] = nil
                     self.childTaskTokens[id] = nil
+                    self.drainChildQueue(queryIndex: queryIndex)
                 }
             }
             do {
@@ -402,8 +433,8 @@ final class SprintStore: ObservableObject {
                 guard !Task.isCancelled, self.childTaskTokens[id] == token,
                       self.queries.indices.contains(queryIndex), self.queries[queryIndex] == query else { return }
                 self.loadingParentsByQuery[queryIndex]?.remove(parentKey)
-                let children = SprintHierarchy.scopedChildren(keys: keys,
-                                                              stories: self.resultsByQuery[queryIndex] ?? [])
+                let candidates = self.resultsByQuery[queryIndex] ?? []
+                let children = SprintHierarchy.scopedChildren(keys: keys, stories: candidates)
                 self.childrenByQuery[queryIndex, default: [:]][parentKey] = children
                 self.loadedParentsByQuery[queryIndex, default: []].insert(parentKey)
                 if children.isEmpty { self.expandedByQuery[queryIndex]?.remove(parentKey) }
@@ -461,6 +492,7 @@ final class SprintStore: ObservableObject {
         childTasks.values.forEach { $0.cancel() }
         childTasks.removeAll()
         childTaskTokens.removeAll()
+        pendingParentsByQuery.removeAll()
         loadedQueries.removeAll()
         selectionByQuery.removeAll()
         updatedByQuery.removeAll()

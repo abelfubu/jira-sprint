@@ -29,9 +29,8 @@ struct JiraClient: Sendable {
     }
 
     func fetchSubtaskKeys(parentKey: String) throws -> [String] {
-        let output = try Self.run(executable: executable,
-                                  arguments: ["jira", "workitem", "view", parentKey,
-                                              "--fields", "key,subtasks", "--json"])
+        let output = try Self.runMetadata(executable: executable,
+                                          arguments: Self.subtaskArguments(parentKey: parentKey))
         return try Self.decodeSubtaskKeys(Data(output.utf8))
     }
 
@@ -51,6 +50,10 @@ struct JiraClient: Sendable {
         case let .transition(key, status): arguments = Self.transitionArguments(key: key, status: status)
         }
         _ = try Self.run(executable: executable, arguments: arguments)
+    }
+
+    static func subtaskArguments(parentKey: String) -> [String] {
+        ["jira", "workitem", "view", parentKey, "--fields", "subtasks", "--json"]
     }
 
     static func searchArguments(jql: String, limit: Int) -> [String] {
@@ -132,6 +135,40 @@ struct JiraClient: Sendable {
         return nil
     }
 
+    private static func runMetadata(executable: URL, arguments: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = arguments
+        var environment = ProcessInfo.processInfo.environment
+        environment["PATH"] = "/opt/homebrew/bin:/usr/local/bin:\(NSHomeDirectory())/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        process.environment = environment
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        try? stdout.fileHandleForWriting.close()
+        try? stderr.fileHandleForWriting.close()
+        let timeout = DispatchWorkItem {
+            if process.isRunning { process.terminate() }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 20, execute: timeout)
+        // Metadata responses are small. Draining them on this detached worker avoids a
+        // DispatchGroup reader per concurrent SwiftUI row and reliably observes process EOF.
+        let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
+        let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        timeout.cancel()
+        if process.terminationStatus == SIGTERM {
+            throw ClientError.failed("Timed out loading subtasks for \(arguments[3]).")
+        }
+        guard process.terminationStatus == 0 else {
+            let message = String(decoding: errorData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw ClientError.failed(message.isEmpty ? "acli exited with status \(process.terminationStatus)." : message)
+        }
+        return String(decoding: outputData, as: UTF8.self)
+    }
+
     private static func findExecutable() -> URL? {
         var candidates: [String] = []
         if let explicit = ProcessInfo.processInfo.environment["ACLI_PATH"] { candidates.append(explicit) }
@@ -158,6 +195,10 @@ struct JiraClient: Sendable {
         process.standardOutput = stdout
         process.standardError = stderr
         try process.run()
+        // The child owns its duplicated descriptors now. Keeping the parent's write ends open
+        // prevents readDataToEndOfFile() from ever observing EOF for view/metadata commands.
+        try? stdout.fileHandleForWriting.close()
+        try? stderr.fileHandleForWriting.close()
         let output = ProcessOutput()
         let errors = ProcessOutput()
         let readers = DispatchGroup()
