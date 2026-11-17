@@ -93,7 +93,13 @@ enum Theme {
     static var orange: Color { palette.orange }
     static var purple: Color { palette.purple }
 
-    static func statusColor(_ status: String) -> Color {
+    static func statusColor(_ status: String, jiraColorName: String? = nil) -> Color {
+        switch jiraColorName?.lowercased() {
+        case "green": return green
+        case "yellow": return accent
+        case "blue-gray", "blue_gray", "blue gray": return muted
+        default: break
+        }
         let value = status.lowercased()
         if value.contains("block") { return red }
         if value.contains("done") || value.contains("complete") { return green }

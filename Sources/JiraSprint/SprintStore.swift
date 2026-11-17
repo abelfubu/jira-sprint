@@ -203,6 +203,11 @@ final class SprintStore: ObservableObject {
                                           current: story.status)
     }
 
+    func jiraColorName(for status: String) -> String? {
+        resultsByQuery.values.flatMap { $0 }
+            .first { $0.status.caseInsensitiveCompare(status) == .orderedSame }?.statusColorName
+    }
+
     var formItemCount: Int {
         switch activeForm {
         case .actions: SprintAction.allCases.count

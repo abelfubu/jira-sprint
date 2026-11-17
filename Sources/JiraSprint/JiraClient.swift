@@ -71,11 +71,14 @@ struct JiraClient: Sendable {
             let fields = object["fields"] as? [String: Any] ?? object
             let summary = fields["summary"] as? String ?? "(no summary)"
             let status = name(in: fields["status"]) ?? "Unknown"
+            let statusObject = fields["status"] as? [String: Any]
+            let statusCategory = statusObject?["statusCategory"] as? [String: Any]
+            let statusColorName = statusCategory?["colorName"] as? String
             let assignee = name(in: fields["assignee"]) ?? "Unassigned"
             let issueType = name(in: fields["issuetype"]) ?? "Story"
             let priority = name(in: fields["priority"])
             let browseURL = browseURL(for: object, key: key, site: site)
-            return Story(key: key, summary: summary, status: status, assignee: assignee,
+            return Story(key: key, summary: summary, status: status, statusColorName: statusColorName, assignee: assignee,
                          issueType: issueType, priority: priority, browseURL: browseURL)
         }
     }

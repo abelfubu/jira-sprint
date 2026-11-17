@@ -309,11 +309,11 @@ struct ContentView: View {
                                     Button { store.selectFormItem(index) } label: {
                                         HStack(spacing: 10) {
                                             Circle()
-                                                .fill(Theme.statusColor(status))
+                                                .fill(Theme.statusColor(status, jiraColorName: store.jiraColorName(for: status)))
                                                 .frame(width: 7, height: 7)
                                             Text(status)
                                                 .sprintFont(11.5)
-                                                .foregroundStyle(Theme.statusColor(status))
+                                                .foregroundStyle(Theme.statusColor(status, jiraColorName: store.jiraColorName(for: status)))
                                             Spacer()
                                             if index == store.formSelection {
                                                 Image(systemName: "checkmark")
@@ -573,7 +573,7 @@ private struct StoryRow: View {
         }
     }
 
-    private var statusColor: Color { Theme.statusColor(story.status) }
+    private var statusColor: Color { Theme.statusColor(story.status, jiraColorName: story.statusColorName) }
 
     private func priorityColor(_ priority: String) -> Color {
         switch priority.lowercased() {

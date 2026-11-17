@@ -85,7 +85,9 @@ enum SelfTests {
           }
         },{
           "key":"ITA-556","fields":{
-            "summary":"Draft invoice status","status":{"name":"En curso"},
+            "summary":"Draft invoice status","status":{
+              "name":"En curso","statusCategory":{"key":"indeterminate","colorName":"yellow"}
+            },
             "assignee":null,"issuetype":{"name":"Error"}
           }
         },{
@@ -99,6 +101,7 @@ enum SelfTests {
         try expect(story.assignee == "Abel" && story.issueType == "Story" && story.priority == "High", "People and type metadata")
         try expect(stories[1].key == "ITA-556" && stories[1].issueType == "Error" && stories[1].assignee == "Unassigned",
                    "Mixed sprint work-item types remain visible")
+        try expect(stories[1].statusColorName == "yellow", "Jira status category color is preserved")
         try expect(story.browseURL?.absoluteString == "https://example.atlassian.net/browse/NOM-123", "Browse URL derived from API self URL")
     }
 
@@ -136,6 +139,12 @@ enum SelfTests {
         try expect(Color(sprintHex: "#0D1117") != nil, "RGB color parsing")
         try expect(Color(sprintHex: "#FFFFFF80") != nil, "RGBA color parsing")
         try expect(Color(sprintHex: "not-a-color") == nil, "Invalid color rejection")
+        try expect(Theme.statusColor("En curso", jiraColorName: "yellow") == Theme.accent,
+                   "Jira in-progress category uses blue")
+        try expect(Theme.statusColor("En entorno DEV", jiraColorName: "green") == Theme.green,
+                   "Jira done category uses green")
+        try expect(Theme.statusColor("Tareas por hacer", jiraColorName: "blue-gray") == Theme.muted,
+                   "Jira to-do category uses gray")
         Theme.applyFont("Geist Mono")
         try expect(Theme.fontFamily == "Geist Mono", "Custom font family")
         Theme.applyFont(" ")

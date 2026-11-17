@@ -4,6 +4,7 @@ struct Story: Identifiable, Equatable, Sendable {
     let key: String
     let summary: String
     let status: String
+    var statusColorName: String? = nil
     let assignee: String
     let issueType: String
     let priority: String?

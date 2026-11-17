@@ -107,7 +107,7 @@ The app reads `~/.config/jira-sprint/config.json` and creates defaults when the 
 - `jql`: legacy single-query setting used when `queries` is omitted or contains no valid entries. Existing single-query configs remain compatible.
 - `limit`: maximum results per query, clamped to `1`–`200`; defaults to `100`.
 - `site`: optional Jira base URL used to construct browse links when `acli` does not return an API `self` or browse URL.
-- `statuses`: ordered status choices for the transition picker. The app also adds statuses found in loaded results, removes duplicates and the current status, and defaults to `To Do`, `In Progress`, `In Review`, `Blocked`, and `Done`. Jira validates whether each named transition is allowed by the story's workflow.
+- `statuses`: ordered status choices for the transition picker. The app also adds statuses found in loaded results, removes duplicates and the current status, and defaults to `To Do`, `In Progress`, `In Review`, `Blocked`, and `Done`. Jira validates whether each named transition is allowed by the story's workflow. Loaded status chips use Jira's `statusCategory.colorName`: `yellow` maps to the accent blue, `green` to green, and `blue-gray` to muted gray. Missing or unknown category metadata falls back to status-name colors.
 - `font`: optional installed font family; defaults to JetBrains Mono. Use `System` for San Francisco.
 - `colors`: optional `#RRGGBB` or `#RRGGBBAA` overrides. Supported names are `background`, `chrome`, `surface`, `raised`, `hover`, `selected`, `border`, `foreground`, `muted`, `dim`, `accent`, `green`, `red`, `yellow`, `orange`, and `purple`.
 - `shortcuts`: optional action-to-bindings overrides. Omitted actions keep their defaults; an empty array disables an action.
