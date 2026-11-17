@@ -386,8 +386,6 @@ final class SprintStore: ObservableObject {
         childTaskTokens[id] = token
         loadingParentsByQuery[queryIndex, default: []].insert(parentKey)
         if selectedQueryIndex == queryIndex { rebuildRows() }
-        let limit = requestLimit
-        let site = jiraSite
         childTasks[id] = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -398,12 +396,14 @@ final class SprintStore: ObservableObject {
                 }
             }
             do {
-                let children = try await Task.detached(priority: .userInitiated) {
-                    try JiraClient().fetchSubtasks(parentKey: parentKey, limit: limit, site: site)
+                let keys = try await Task.detached(priority: .userInitiated) {
+                    try JiraClient().fetchSubtaskKeys(parentKey: parentKey)
                 }.value
                 guard !Task.isCancelled, self.childTaskTokens[id] == token,
                       self.queries.indices.contains(queryIndex), self.queries[queryIndex] == query else { return }
                 self.loadingParentsByQuery[queryIndex]?.remove(parentKey)
+                let children = SprintHierarchy.scopedChildren(keys: keys,
+                                                              stories: self.resultsByQuery[queryIndex] ?? [])
                 self.childrenByQuery[queryIndex, default: [:]][parentKey] = children
                 self.loadedParentsByQuery[queryIndex, default: []].insert(parentKey)
                 if children.isEmpty { self.expandedByQuery[queryIndex]?.remove(parentKey) }

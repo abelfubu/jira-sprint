@@ -29,6 +29,15 @@ struct SprintListItem: Identifiable, Equatable, Sendable {
 }
 
 enum SprintHierarchy {
+    static func scopedChildren(keys: [String], stories: [Story]) -> [Story] {
+        let candidates = Dictionary(stories.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        var seen: Set<String> = []
+        return keys.compactMap { key in
+            guard seen.insert(key).inserted, let story = candidates[key], story.isSubtask else { return nil }
+            return story
+        }
+    }
+
     static func rows(stories: [Story], expandedParents: Set<String>,
                      loadedParents: Set<String>, loadingParents: Set<String>) -> [SprintListItem] {
         var seen: Set<String> = []

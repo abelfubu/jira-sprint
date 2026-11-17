@@ -28,16 +28,11 @@ struct JiraClient: Sendable {
         return try Self.decodeSearch(Data(output.utf8), site: site)
     }
 
-    func fetchSubtasks(parentKey: String, limit: Int, site: String?) throws -> [Story] {
+    func fetchSubtaskKeys(parentKey: String) throws -> [String] {
         let output = try Self.run(executable: executable,
                                   arguments: ["jira", "workitem", "view", parentKey,
                                               "--fields", "key,subtasks", "--json"])
-        let keys = try Self.decodeSubtaskKeys(Data(output.utf8))
-        guard !keys.isEmpty else { return [] }
-        let jql = "key in (\(keys.joined(separator: ","))) ORDER BY rank ASC"
-        var children = try fetchStories(jql: jql, limit: max(limit, keys.count), site: site)
-        for index in children.indices { children[index].parentKey = parentKey }
-        return children
+        return try Self.decodeSubtaskKeys(Data(output.utf8))
     }
 
     static func decodeSubtaskKeys(_ data: Data) throws -> [String] {

@@ -125,7 +125,7 @@ enum SelfTests {
         let child = try JiraClient.decodeSearch(Data(childJSON.utf8))[0]
         try expect(child.parentKey == "P-1" && child.isSubtask, "Jira parent and subtask metadata are decoded")
         let keys = try JiraClient.decodeSubtaskKeys(Data(#"{"fields":{"subtasks":[{"key":"C-1"},{"key":"C-2"}]}}"#.utf8))
-        try expect(keys == ["C-1", "C-2"], "Parent view decodes child keys for batched search")
+        try expect(keys == ["C-1", "C-2"], "Parent view decodes child relationships")
 
         func story(_ key: String, subtask: Bool = false) -> Story {
             Story(key: key, summary: key, status: "To Do", assignee: "Unassigned",
@@ -136,6 +136,9 @@ enum SelfTests {
         var orphan = story("O-1", subtask: true)
         orphan.parentKey = "OUT-1"
         let source = [parent, child, emptyParent, orphan, child]
+        let scoped = SprintHierarchy.scopedChildren(keys: ["C-1", "OUTSIDE-1", "P-2", "C-1"], stories: source)
+        try expect(scoped.map(\.key) == ["C-1"],
+                   "Expansion reuses only in-scope subtasks and ignores outside or non-subtask keys")
         let collapsed = SprintHierarchy.rows(stories: source, expandedParents: [],
                                              loadedParents: ["P-1", "P-2"], loadingParents: [])
         try expect(collapsed.map(\.id) == ["P-1", "P-2", "O-1"], "Subtasks are collapsed by default and duplicates are removed")
@@ -147,6 +150,13 @@ enum SelfTests {
         let unresolvedRows = SprintHierarchy.rows(stories: [parent, unresolved], expandedParents: [],
                                                   loadedParents: [], loadingParents: [])
         try expect(unresolvedRows.map(\.id) == ["P-1"], "Unresolved sprint subtasks do not appear expanded by default")
+        let uncheckedEmpty = SprintHierarchy.rows(stories: [story("EMPTY-1")], expandedParents: [],
+                                                  loadedParents: [], loadingParents: [])
+        let checkedEmpty = SprintHierarchy.rows(stories: [story("EMPTY-1")], expandedParents: [],
+                                                loadedParents: ["EMPTY-1"], loadingParents: [])
+        try expect(uncheckedEmpty[0].showsDisclosure, "Unchecked parents can be expanded")
+        try expect(!checkedEmpty[0].showsDisclosure && checkedEmpty[0].childCount == 0,
+                   "Checked parents with zero subtasks hide their disclosure chevron")
 
         let expanded = SprintHierarchy.rows(stories: source, expandedParents: ["P-1"],
                                             loadedParents: ["P-1", "P-2"], loadingParents: [])
