@@ -114,6 +114,9 @@ enum SelfTests {
         try expect(stories[0].issueTypeAvatarID == 10315 && stories[1].issueTypeAvatarID == 10303,
                    "Jira universal avatar IDs are preserved")
         try expect(story.browseURL?.absoluteString == "https://example.atlassian.net/browse/NOM-123", "Browse URL derived from API self URL")
+        let configuredSite = try JiraClient.decodeSearch(Data(json.utf8), site: "https://nomoapp.atlassian.net")
+        try expect(configuredSite.first?.browseURL?.absoluteString == "https://nomoapp.atlassian.net/browse/NOM-123",
+                   "Configured Jira site takes precedence over internal API hosts")
     }
 
     private static func testIssueTypeGlyphs() throws {

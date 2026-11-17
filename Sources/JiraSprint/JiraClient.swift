@@ -100,6 +100,9 @@ struct JiraClient: Sendable {
                 return url
             }
         }
+        if let site, !site.isEmpty {
+            return URL(string: site)?.appendingPathComponent("browse").appendingPathComponent(key)
+        }
         if let value = object["self"] as? String, let components = URLComponents(string: value),
            let scheme = components.scheme, let host = components.host {
             var browse = URLComponents()
@@ -109,8 +112,7 @@ struct JiraClient: Sendable {
             browse.path = "/browse/\(key)"
             return browse.url
         }
-        guard let site, !site.isEmpty else { return nil }
-        return URL(string: site)?.appendingPathComponent("browse").appendingPathComponent(key)
+        return nil
     }
 
     private static func findExecutable() -> URL? {
