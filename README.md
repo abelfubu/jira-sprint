@@ -90,11 +90,11 @@ The app reads `~/.config/jira-sprint/config.json` and creates defaults when the 
   "queries": [
     {
       "label": "Sprint",
-      "jql": "sprint in openSprints() AND issuetype = Story ORDER BY rank ASC"
+      "jql": "sprint in openSprints() ORDER BY rank ASC"
     },
     {
       "label": "Mine",
-      "jql": "sprint in openSprints() AND issuetype = Story AND assignee = currentUser() ORDER BY rank ASC"
+      "jql": "sprint in openSprints() AND assignee = currentUser() ORDER BY rank ASC"
     }
   ],
   "limit": 100,
@@ -103,7 +103,7 @@ The app reads `~/.config/jira-sprint/config.json` and creates defaults when the 
 }
 ```
 
-- `queries`: ordered query tabs with a display `label` and complete `jql`. The first tab loads at launch; other tabs load when selected. Change `Story` if your Jira uses another user-story type.
+- `queries`: ordered query tabs with a display `label` and complete `jql`. The first tab loads at launch; other tabs load when selected. The defaults include Stories, Errors, Tasks, and other sprint work-item types; add an `issuetype` clause only if you want to restrict them.
 - `jql`: legacy single-query setting used when `queries` is omitted or contains no valid entries. Existing single-query configs remain compatible.
 - `limit`: maximum results per query, clamped to `1`–`200`; defaults to `100`.
 - `site`: optional Jira base URL used to construct browse links when `acli` does not return an API `self` or browse URL.

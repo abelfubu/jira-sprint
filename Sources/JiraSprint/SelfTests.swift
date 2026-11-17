@@ -37,6 +37,7 @@ enum SelfTests {
         try expect(config.effectiveJQL == "project = NOM AND sprint in openSprints()", "Custom JQL")
         try expect(config.effectiveLimit == 200, "Result limit is capped")
         try expect(config.effectiveSite == "https://example.atlassian.net", "Site normalization")
+        try expect(!SprintConfig.defaultJQL.contains("issuetype"), "Default sprint includes every work-item type")
         try expect(JiraConfig(jql: " ", limit: 0, site: "not a URL", colors: nil, font: nil, shortcuts: nil).effectiveJQL == SprintConfig.defaultJQL,
                    "Blank JQL restores the default")
         try expect(JiraConfig(jql: nil, limit: 0, site: nil, colors: nil, font: nil, shortcuts: nil).effectiveLimit == 1,
@@ -83,14 +84,21 @@ enum SelfTests {
             "priority":{"name":"High"}
           }
         },{
+          "key":"ITA-556","fields":{
+            "summary":"Draft invoice status","status":{"name":"En curso"},
+            "assignee":null,"issuetype":{"name":"Error"}
+          }
+        },{
           "key":"NOM-123","fields":{"summary":"Duplicate"}
         }]}
         """
         let stories = try JiraClient.decodeSearch(Data(json.utf8))
         guard let story = stories.first else { throw Failure(description: "Missing decoded story") }
-        try expect(stories.count == 1 && story.id == "NOM-123", "Stable identity and deduplication")
+        try expect(stories.count == 2 && story.id == "NOM-123", "Stable identity and deduplication")
         try expect(story.summary == "Retry rejected invoices" && story.status == "In Progress", "Summary and status")
         try expect(story.assignee == "Abel" && story.issueType == "Story" && story.priority == "High", "People and type metadata")
+        try expect(stories[1].key == "ITA-556" && stories[1].issueType == "Error" && stories[1].assignee == "Unassigned",
+                   "Mixed sprint work-item types remain visible")
         try expect(story.browseURL?.absoluteString == "https://example.atlassian.net/browse/NOM-123", "Browse URL derived from API self URL")
     }
 

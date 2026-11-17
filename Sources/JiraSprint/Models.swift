@@ -42,7 +42,7 @@ enum SprintMutation: Equatable, Sendable {
 }
 
 enum SprintConfig {
-    static let defaultJQL = "sprint in openSprints() AND issuetype = Story ORDER BY rank ASC"
+    static let defaultJQL = "sprint in openSprints() ORDER BY rank ASC"
     static let defaultStatuses = ["To Do", "In Progress", "In Review", "Blocked", "Done"]
 
     static func statusChoices(configured: [String], available: [String], current: String) -> [String] {
