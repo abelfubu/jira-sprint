@@ -516,9 +516,9 @@ private struct StoryRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 9) {
-            Image(systemName: "doc.text.fill")
+            Image(systemName: issueTypeGlyph.systemImageName)
                 .font(.system(size: 12))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.issueTypeColor(issueTypeGlyph))
                 .frame(width: 15)
                 .padding(.top, 3)
             VStack(alignment: .leading, spacing: 5) {
@@ -573,6 +573,9 @@ private struct StoryRow: View {
         }
     }
 
+    private var issueTypeGlyph: IssueTypeGlyph {
+        IssueTypeGlyph(iconURL: story.issueTypeIconURL, avatarID: story.issueTypeAvatarID, isSubtask: story.isSubtask)
+    }
     private var statusColor: Color { Theme.statusColor(story.status, jiraColorName: story.statusColorName) }
 
     private func priorityColor(_ priority: String) -> Color {

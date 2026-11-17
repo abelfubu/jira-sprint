@@ -93,6 +93,15 @@ enum Theme {
     static var orange: Color { palette.orange }
     static var purple: Color { palette.purple }
 
+    static func issueTypeColor(_ glyph: IssueTypeGlyph) -> Color {
+        switch glyph {
+        case .story, .improvement, .newFeature: green
+        case .bug: red
+        case .task, .subtask, .generic: accent
+        case .epic: purple
+        }
+    }
+
     static func statusColor(_ status: String, jiraColorName: String? = nil) -> Color {
         switch jiraColorName?.lowercased() {
         case "green": return green

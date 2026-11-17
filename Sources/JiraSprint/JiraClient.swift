@@ -75,11 +75,16 @@ struct JiraClient: Sendable {
             let statusCategory = statusObject?["statusCategory"] as? [String: Any]
             let statusColorName = statusCategory?["colorName"] as? String
             let assignee = name(in: fields["assignee"]) ?? "Unassigned"
-            let issueType = name(in: fields["issuetype"]) ?? "Story"
+            let issueTypeObject = fields["issuetype"] as? [String: Any]
+            let issueType = name(in: issueTypeObject) ?? "Story"
+            let issueTypeIconURL = (issueTypeObject?["iconUrl"] as? String).flatMap(URL.init(string:))
+            let issueTypeAvatarID = issueTypeObject?["avatarId"] as? Int
+            let isSubtask = issueTypeObject?["subtask"] as? Bool ?? false
             let priority = name(in: fields["priority"])
             let browseURL = browseURL(for: object, key: key, site: site)
             return Story(key: key, summary: summary, status: status, statusColorName: statusColorName, assignee: assignee,
-                         issueType: issueType, priority: priority, browseURL: browseURL)
+                         issueType: issueType, issueTypeIconURL: issueTypeIconURL, issueTypeAvatarID: issueTypeAvatarID,
+                isSubtask: isSubtask, priority: priority, browseURL: browseURL)
         }
     }
 

@@ -7,6 +7,9 @@ struct Story: Identifiable, Equatable, Sendable {
     var statusColorName: String? = nil
     let assignee: String
     let issueType: String
+    var issueTypeIconURL: URL? = nil
+    var issueTypeAvatarID: Int? = nil
+    var isSubtask: Bool = false
     let priority: String?
     let browseURL: URL?
 
@@ -40,6 +43,44 @@ enum SprintAction: CaseIterable {
 enum SprintMutation: Equatable, Sendable {
     case assignToMe(key: String)
     case transition(key: String, status: String)
+}
+
+enum IssueTypeGlyph: Equatable, Sendable {
+    case story, bug, task, subtask, epic, improvement, newFeature, generic
+
+    init(iconURL: URL?, avatarID: Int? = nil, isSubtask: Bool = false) {
+        if isSubtask { self = .subtask; return }
+        switch avatarID {
+        case 10315: self = .story; return
+        case 10303: self = .bug; return
+        case 10316: self = .subtask; return
+        default: break
+        }
+        let asset = iconURL?.lastPathComponent.lowercased().replacingOccurrences(of: ".svg", with: "")
+        switch asset {
+        case "story": self = .story
+        case "bug": self = .bug
+        case "task": self = .task
+        case "subtask", "sub-task", "subtask_alternate": self = .subtask
+        case "epic": self = .epic
+        case "improvement": self = .improvement
+        case "newfeature", "new-feature": self = .newFeature
+        default: self = .generic
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .story: "bookmark.fill"
+        case .bug: "ladybug.fill"
+        case .task: "checkmark.square.fill"
+        case .subtask: "arrow.turn.down.right"
+        case .epic: "bolt.fill"
+        case .improvement: "arrow.up.square.fill"
+        case .newFeature: "plus.square.fill"
+        case .generic: "doc.text.fill"
+        }
+    }
 }
 
 enum SprintConfig {

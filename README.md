@@ -6,6 +6,7 @@ A native macOS current-sprint story list using SwiftUI, AppKit, and the authenti
 
 - Fetches stories through one or more configurable JQL tabs using `acli jira workitem search`.
 - Displays story key, summary, status, assignee, and priority.
+- Selects row glyphs from Jira's `issuetype` icon metadata (`iconUrl`, standard universal `avatarId`, and `subtask`) rather than localized type names, using local SF Symbol equivalents for Story, Bug, Task, Sub-task, Epic, Improvement, and New Feature. Unknown custom icons use a generic document.
 - Keyboard navigation, numbered query tabs, browser opening, URL copying, and periodic refresh.
 - Keyboard- and mouse-driven actions to self-assign stories and transition their status.
 - Caches results and selection per query and preserves existing stories when a refresh fails.

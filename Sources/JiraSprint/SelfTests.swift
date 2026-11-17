@@ -19,6 +19,7 @@ enum SelfTests {
             try testQueries()
             try testStatuses()
             try testDecoding()
+            try testIssueTypeGlyphs()
             try testArrayDecoding()
             try testInvalidResponse()
             try testArguments()
@@ -80,7 +81,10 @@ enum SelfTests {
           "key":"NOM-123","self":"https://example.atlassian.net/rest/api/3/issue/123",
           "fields":{
             "summary":"Retry rejected invoices","status":{"name":"In Progress"},
-            "assignee":{"displayName":"Abel"},"issuetype":{"name":"Story"},
+            "assignee":{"displayName":"Abel"},"issuetype":{
+              "name":"Story","iconUrl":"https://example.atlassian.net/images/icons/issuetypes/story.svg",
+              "avatarId":10315,"subtask":false
+            },
             "priority":{"name":"High"}
           }
         },{
@@ -88,7 +92,10 @@ enum SelfTests {
             "summary":"Draft invoice status","status":{
               "name":"En curso","statusCategory":{"key":"indeterminate","colorName":"yellow"}
             },
-            "assignee":null,"issuetype":{"name":"Error"}
+            "assignee":null,"issuetype":{
+              "name":"Error","iconUrl":"https://example.atlassian.net/images/icons/issuetypes/bug.svg",
+              "avatarId":10303,"subtask":false
+            }
           }
         },{
           "key":"NOM-123","fields":{"summary":"Duplicate"}
@@ -102,7 +109,31 @@ enum SelfTests {
         try expect(stories[1].key == "ITA-556" && stories[1].issueType == "Error" && stories[1].assignee == "Unassigned",
                    "Mixed sprint work-item types remain visible")
         try expect(stories[1].statusColorName == "yellow", "Jira status category color is preserved")
+        try expect(stories[0].issueTypeIconURL?.lastPathComponent == "story.svg" &&
+                   stories[1].issueTypeIconURL?.lastPathComponent == "bug.svg", "Jira issue-type icon URLs are preserved")
+        try expect(stories[0].issueTypeAvatarID == 10315 && stories[1].issueTypeAvatarID == 10303,
+                   "Jira universal avatar IDs are preserved")
         try expect(story.browseURL?.absoluteString == "https://example.atlassian.net/browse/NOM-123", "Browse URL derived from API self URL")
+    }
+
+    private static func testIssueTypeGlyphs() throws {
+        func glyph(_ asset: String) -> IssueTypeGlyph {
+            IssueTypeGlyph(iconURL: URL(string: "https://example.atlassian.net/images/icons/issuetypes/\(asset).svg"))
+        }
+        try expect(glyph("story") == .story && glyph("bug") == .bug && glyph("task") == .task,
+                   "Standard Jira story, bug, and task icon assets")
+        try expect(glyph("subtask") == .subtask && glyph("epic") == .epic,
+                   "Standard Jira subtask and epic icon assets")
+        try expect(glyph("improvement") == .improvement && glyph("newfeature") == .newFeature,
+                   "Standard Jira improvement and new-feature icon assets")
+        try expect(glyph("10002") == .generic && IssueTypeGlyph(iconURL: nil) == .generic,
+                   "Custom or missing Jira icons retain the generic fallback")
+        try expect(IssueTypeGlyph(iconURL: nil, avatarID: 10315) == .story &&
+                   IssueTypeGlyph(iconURL: nil, avatarID: 10303) == .bug &&
+                   IssueTypeGlyph(iconURL: nil, avatarID: 10316) == .subtask,
+                   "Jira Cloud universal avatar IDs select icons without localized names")
+        try expect(IssueTypeGlyph(iconURL: nil, avatarID: 99999, isSubtask: true) == .subtask,
+                   "Jira subtask metadata handles custom avatar IDs")
     }
 
     private static func testArrayDecoding() throws {
