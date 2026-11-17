@@ -133,7 +133,8 @@ enum SelfTests {
         }
         let parent = story("P-1")
         let emptyParent = story("P-2")
-        let orphan = story("O-1", subtask: true)
+        var orphan = story("O-1", subtask: true)
+        orphan.parentKey = "OUT-1"
         let source = [parent, child, emptyParent, orphan, child]
         let collapsed = SprintHierarchy.rows(stories: source, expandedParents: [],
                                              loadedParents: ["P-1", "P-2"], loadingParents: [])
@@ -141,6 +142,11 @@ enum SelfTests {
         try expect(collapsed[0].childCount == 1 && collapsed[0].showsDisclosure, "Parent exposes its subtask count")
         try expect(!collapsed[1].showsDisclosure, "Loaded parents without children lose their disclosure control")
         try expect(collapsed[2].depth == 0 && !collapsed[2].showsDisclosure, "Orphaned subtasks remain visible at top level")
+        var unresolved = child
+        unresolved.parentKey = nil
+        let unresolvedRows = SprintHierarchy.rows(stories: [parent, unresolved], expandedParents: [],
+                                                  loadedParents: [], loadingParents: [])
+        try expect(unresolvedRows.map(\.id) == ["P-1"], "Unresolved sprint subtasks do not appear expanded by default")
 
         let expanded = SprintHierarchy.rows(stories: source, expandedParents: ["P-1"],
                                             loadedParents: ["P-1", "P-2"], loadingParents: [])

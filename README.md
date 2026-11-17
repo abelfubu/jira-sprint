@@ -6,7 +6,7 @@ A native macOS current-sprint story list using SwiftUI, AppKit, and the authenti
 
 - Fetches stories through one or more configurable JQL tabs using `acli jira workitem search`.
 - Displays story key, summary, status, assignee, and priority.
-- Nests subtasks under their real Jira parent, collapsed by default with per-query expansion state. Expanding lazily runs one parent `view` and one batched child `search`; orphan subtasks remain top-level. Re-expanding refreshes that parent, while normal sprint refresh never fans out into per-parent requests.
+- Nests subtasks under their real Jira parent, collapsed by default with per-query expansion state. Expanding lazily runs one parent `view` and one batched child `search`; orphan subtasks remain top-level. Re-expanding refreshes that parent, while normal sprint refresh never fans out into per-parent requests. Sprint subtasks with unresolved parent links stay hidden until their parent expands; decoded subtasks with a genuinely absent parent remain top-level.
 - Selects row glyphs from Jira's `issuetype` icon metadata (`iconUrl`, standard universal `avatarId`, and `subtask`) rather than localized type names, using local SF Symbol equivalents for Story, Bug, Task, Sub-task, Epic, Improvement, and New Feature. Unknown custom icons use a generic document.
 - Keyboard navigation, numbered query tabs, browser opening, URL copying, and periodic refresh.
 - Keyboard- and mouse-driven actions to self-assign stories and transition their status.

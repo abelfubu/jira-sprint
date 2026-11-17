@@ -38,6 +38,9 @@ enum SprintHierarchy {
         var topLevel: [Story] = []
 
         for story in unique {
+            // Sprint search cannot decode parent links. Unknown parents are not confirmed orphans;
+            // keep those children hidden until their parent is expanded instead of looking expanded by default.
+            if story.isSubtask, story.parentKey == nil { continue }
             if let parentKey = story.parentKey, parentKey != story.key, possibleParents.contains(parentKey) {
                 childrenByParent[parentKey, default: []].append(story)
             } else {
