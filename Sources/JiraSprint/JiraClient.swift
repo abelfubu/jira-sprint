@@ -28,6 +28,27 @@ struct JiraClient: Sendable {
         return try Self.decodeSearch(Data(output.utf8), site: site)
     }
 
+    func fetchSubtasks(parentKey: String, limit: Int, site: String?) throws -> [Story] {
+        let output = try Self.run(executable: executable,
+                                  arguments: ["jira", "workitem", "view", parentKey,
+                                              "--fields", "key,subtasks", "--json"])
+        let keys = try Self.decodeSubtaskKeys(Data(output.utf8))
+        guard !keys.isEmpty else { return [] }
+        let jql = "key in (\(keys.joined(separator: ","))) ORDER BY rank ASC"
+        var children = try fetchStories(jql: jql, limit: max(limit, keys.count), site: site)
+        for index in children.indices { children[index].parentKey = parentKey }
+        return children
+    }
+
+    static func decodeSubtaskKeys(_ data: Data) throws -> [String] {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let fields = object["fields"] as? [String: Any] else {
+            throw ClientError.invalidResponse("acli returned JSON without parent fields.")
+        }
+        let subtasks = fields["subtasks"] as? [[String: Any]] ?? []
+        return subtasks.compactMap { $0["key"] as? String }
+    }
+
     func perform(_ mutation: SprintMutation) throws {
         let arguments: [String]
         switch mutation {
@@ -80,11 +101,12 @@ struct JiraClient: Sendable {
             let issueTypeIconURL = (issueTypeObject?["iconUrl"] as? String).flatMap(URL.init(string:))
             let issueTypeAvatarID = issueTypeObject?["avatarId"] as? Int
             let isSubtask = issueTypeObject?["subtask"] as? Bool ?? false
+            let parentKey = (fields["parent"] as? [String: Any])?["key"] as? String
             let priority = name(in: fields["priority"])
             let browseURL = browseURL(for: object, key: key, site: site)
             return Story(key: key, summary: summary, status: status, statusColorName: statusColorName, assignee: assignee,
                          issueType: issueType, issueTypeIconURL: issueTypeIconURL, issueTypeAvatarID: issueTypeAvatarID,
-                isSubtask: isSubtask, priority: priority, browseURL: browseURL)
+                         isSubtask: isSubtask, parentKey: parentKey, priority: priority, browseURL: browseURL)
         }
     }
 

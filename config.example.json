@@ -27,6 +27,7 @@
     "nextQuery": ["l", "]"],
     "previousQuery": ["h", "["],
     "actions": ["a"],
+    "fold": ["f"],
     "refresh": ["r", "cmd-r"]
   }
 }

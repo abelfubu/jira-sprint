@@ -20,6 +20,7 @@ enum SelfTests {
             try testStatuses()
             try testDecoding()
             try testIssueTypeGlyphs()
+            try testHierarchy()
             try testArrayDecoding()
             try testInvalidResponse()
             try testArguments()
@@ -119,6 +120,36 @@ enum SelfTests {
                    "Configured Jira site takes precedence over internal API hosts")
     }
 
+    private static func testHierarchy() throws {
+        let childJSON = #"{"issues":[{"key":"C-1","fields":{"summary":"Child","parent":{"key":"P-1"},"issuetype":{"name":"Sub-task","subtask":true}}}]}"#
+        let child = try JiraClient.decodeSearch(Data(childJSON.utf8))[0]
+        try expect(child.parentKey == "P-1" && child.isSubtask, "Jira parent and subtask metadata are decoded")
+        let keys = try JiraClient.decodeSubtaskKeys(Data(#"{"fields":{"subtasks":[{"key":"C-1"},{"key":"C-2"}]}}"#.utf8))
+        try expect(keys == ["C-1", "C-2"], "Parent view decodes child keys for batched search")
+
+        func story(_ key: String, subtask: Bool = false) -> Story {
+            Story(key: key, summary: key, status: "To Do", assignee: "Unassigned",
+                  issueType: subtask ? "Sub-task" : "Story", isSubtask: subtask, priority: nil, browseURL: nil)
+        }
+        let parent = story("P-1")
+        let emptyParent = story("P-2")
+        let orphan = story("O-1", subtask: true)
+        let source = [parent, child, emptyParent, orphan, child]
+        let collapsed = SprintHierarchy.rows(stories: source, expandedParents: [],
+                                             loadedParents: ["P-1", "P-2"], loadingParents: [])
+        try expect(collapsed.map(\.id) == ["P-1", "P-2", "O-1"], "Subtasks are collapsed by default and duplicates are removed")
+        try expect(collapsed[0].childCount == 1 && collapsed[0].showsDisclosure, "Parent exposes its subtask count")
+        try expect(!collapsed[1].showsDisclosure, "Loaded parents without children lose their disclosure control")
+        try expect(collapsed[2].depth == 0 && !collapsed[2].showsDisclosure, "Orphaned subtasks remain visible at top level")
+
+        let expanded = SprintHierarchy.rows(stories: source, expandedParents: ["P-1"],
+                                            loadedParents: ["P-1", "P-2"], loadingParents: [])
+        try expect(expanded.map(\.id) == ["P-1", "C-1", "P-2", "O-1"], "Expanding inserts children below their parent")
+        try expect(expanded[1].depth == 1 && expanded[1].story.parentKey == "P-1", "Child rows retain indentation and parent identity")
+        let unknown = SprintHierarchy.rows(stories: [parent], expandedParents: [], loadedParents: [], loadingParents: ["P-1"])
+        try expect(unknown[0].showsDisclosure && unknown[0].isLoadingChildren, "Unknown parents support lazy loading")
+    }
+
     private static func testIssueTypeGlyphs() throws {
         func glyph(_ asset: String) -> IssueTypeGlyph {
             IssueTypeGlyph(iconURL: URL(string: "https://example.atlassian.net/images/icons/issuetypes/\(asset).svg"))
@@ -196,6 +227,7 @@ enum SelfTests {
                    "Numbered query tab defaults")
         try expect(custom.display(for: .actions) == "a" && custom.display(for: .openSelected) == "↵",
                    "Action menu shortcut preserves browser opening defaults")
+        try expect(custom.display(for: .fold) == "f", "Subtask folding shortcut")
     }
 }
 #endif

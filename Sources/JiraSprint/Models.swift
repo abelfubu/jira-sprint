@@ -10,10 +10,59 @@ struct Story: Identifiable, Equatable, Sendable {
     var issueTypeIconURL: URL? = nil
     var issueTypeAvatarID: Int? = nil
     var isSubtask: Bool = false
+    var parentKey: String? = nil
     let priority: String?
     let browseURL: URL?
 
     var id: String { key }
+}
+
+struct SprintListItem: Identifiable, Equatable, Sendable {
+    let story: Story
+    let childCount: Int
+    let depth: Int
+    let isExpanded: Bool
+    let showsDisclosure: Bool
+    let isLoadingChildren: Bool
+
+    var id: String { story.key }
+}
+
+enum SprintHierarchy {
+    static func rows(stories: [Story], expandedParents: Set<String>,
+                     loadedParents: Set<String>, loadingParents: Set<String>) -> [SprintListItem] {
+        var seen: Set<String> = []
+        let unique = stories.filter { seen.insert($0.key).inserted }
+        let possibleParents = Set(unique.filter { !$0.isSubtask }.map(\.key))
+        var childrenByParent: [String: [Story]] = [:]
+        var topLevel: [Story] = []
+
+        for story in unique {
+            if let parentKey = story.parentKey, parentKey != story.key, possibleParents.contains(parentKey) {
+                childrenByParent[parentKey, default: []].append(story)
+            } else {
+                topLevel.append(story)
+            }
+        }
+
+        return topLevel.flatMap { story -> [SprintListItem] in
+            let children = childrenByParent[story.key] ?? []
+            let expanded = expandedParents.contains(story.key)
+            let parent = SprintListItem(
+                story: story,
+                childCount: children.count,
+                depth: 0,
+                isExpanded: expanded,
+                showsDisclosure: !story.isSubtask && (!children.isEmpty || !loadedParents.contains(story.key)),
+                isLoadingChildren: loadingParents.contains(story.key)
+            )
+            guard expanded else { return [parent] }
+            return [parent] + children.map {
+                SprintListItem(story: $0, childCount: 0, depth: 1, isExpanded: false,
+                               showsDisclosure: false, isLoadingChildren: false)
+            }
+        }
+    }
 }
 
 enum SprintForm: Equatable {

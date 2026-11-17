@@ -66,7 +66,7 @@ struct ContentView: View {
                 Text("JIRA SPRINT")
                     .sprintFont(12, weight: .semibold)
                     .foregroundStyle(Theme.foreground)
-                Text("\(store.stories.count)")
+                Text("\(store.totalStoryCount)")
                     .sprintFont(10.5)
                     .foregroundStyle(Theme.muted)
                     .padding(.horizontal, 6)
@@ -143,9 +143,14 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(store.stories) { story in
-                        StoryRow(story: story, selected: story.key == store.selectedStoryKey) {
+                    ForEach(store.rows) { item in
+                        let story = item.story
+                        StoryRow(story: story, selected: story.key == store.selectedStoryKey,
+                                 depth: item.depth, childCount: item.childCount, isExpanded: item.isExpanded,
+                                 showsDisclosure: item.showsDisclosure, isLoadingChildren: item.isLoadingChildren) {
                             store.selectStory(story)
+                        } toggleFold: {
+                            store.toggleFold(story)
                         } open: {
                             store.selectStory(story)
                             store.openSelected()
@@ -156,7 +161,7 @@ struct ContentView: View {
                             store.selectStory(story)
                             store.showStatusChoices()
                         }
-                        .id(story.key)
+                        .id(item.id)
                     }
                 }
                 .padding(6)
@@ -209,6 +214,8 @@ struct ContentView: View {
                     Text("·")
                 }
                 Text("\(store.shortcuts.display(for: .nextStory))/\(store.shortcuts.display(for: .previousStory)) navigate")
+                Text("·")
+                Text("\(store.shortcuts.display(for: .fold)) fold")
                 Text("·")
                 Text("\(store.shortcuts.display(for: .actions)) actions")
                 Text("·")
@@ -404,6 +411,14 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             precondition(store.stories.count >= 2, "Keyboard smoke needs at least two fixture stories")
             precondition(focusTarget == .panel, "The story panel did not receive initial focus")
+            precondition(!store.stories.contains { $0.key == "NOM-229" }, "Fixture subtask was not collapsed by default")
+            sendKey("f", keyCode: 3)
+            precondition(store.stories.count >= 2 && store.stories[1].key == "NOM-229", "f did not expand subtasks")
+            sendKey("j", keyCode: 38)
+            precondition(store.selectedStoryKey == "NOM-229", "j did not navigate into an expanded subtask")
+            sendKey("f", keyCode: 3)
+            precondition(store.selectedStoryKey == "NOM-241" && !store.stories.contains { $0.key == "NOM-229" },
+                         "f did not collapse subtasks and restore parent selection")
             sendKey("j", keyCode: 38)
             precondition(store.selectedStoryKey == store.stories[1].key, "j did not select the second story")
             sendKey("k", keyCode: 40)
@@ -486,8 +501,10 @@ struct ContentView: View {
     }
 
     private func captureOwnView(at path: String) {
-        let live = ProcessInfo.processInfo.environment["JIRA_SPRINT_LIVE"] == "1"
-        DispatchQueue.main.asyncAfter(deadline: .now() + (live ? 10 : 1)) {
+        let environment = ProcessInfo.processInfo.environment
+        let live = environment["JIRA_SPRINT_LIVE"] == "1"
+        let expandKey = environment["JIRA_SPRINT_EXPAND"]
+        func capture() {
             guard let view = NSApp.windows.first?.contentView,
                   let representation = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { exit(1) }
             view.cacheDisplay(in: view.bounds, to: representation)
@@ -501,6 +518,33 @@ struct ContentView: View {
                 exit(1)
             }
         }
+        func captureAfterExpansion(attempt: Int = 0) {
+            guard let expandKey else { capture(); return }
+            if let row = store.rows.first(where: { $0.id == expandKey }), !row.isLoadingChildren {
+                capture()
+            } else if attempt < 30 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { captureAfterExpansion(attempt: attempt + 1) }
+            } else {
+                FileHandle.standardError.write(Data("Timed out loading subtasks for \(expandKey)\n".utf8))
+                exit(1)
+            }
+        }
+        func expandWhenAvailable(attempt: Int = 0) {
+            guard let expandKey else { capture(); return }
+            if let story = store.stories.first(where: { $0.key == expandKey }) {
+                store.selectStory(story)
+                store.toggleFold(story)
+                captureAfterExpansion()
+            } else if attempt < 30 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { expandWhenAvailable(attempt: attempt + 1) }
+            } else {
+                FileHandle.standardError.write(Data("Expansion key not found: \(expandKey)\n".utf8))
+                exit(1)
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (live ? 8 : 1)) {
+            if expandKey == nil { capture() } else { expandWhenAvailable() }
+        }
     }
     #endif
 }
@@ -508,7 +552,13 @@ struct ContentView: View {
 private struct StoryRow: View {
     let story: Story
     let selected: Bool
+    let depth: Int
+    let childCount: Int
+    let isExpanded: Bool
+    let showsDisclosure: Bool
+    let isLoadingChildren: Bool
     let select: () -> Void
+    let toggleFold: () -> Void
     let open: () -> Void
     let assign: () -> Void
     let changeStatus: () -> Void
@@ -516,6 +566,21 @@ private struct StoryRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 9) {
+            if depth == 0 {
+                if showsDisclosure {
+                    Button(action: toggleFold) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(Theme.muted)
+                            .frame(width: 10, height: 14)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                    .accessibilityLabel(isExpanded ? "Collapse subtasks" : "Expand subtasks")
+                } else {
+                    Color.clear.frame(width: 10, height: 14).padding(.top, 2)
+                }
+            }
             Image(systemName: issueTypeGlyph.systemImageName)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.issueTypeColor(issueTypeGlyph))
@@ -531,6 +596,12 @@ private struct StoryRow: View {
                     if let priority = story.priority {
                         Text(priority).foregroundStyle(priorityColor(priority))
                     }
+                    if isLoadingChildren {
+                        ProgressView().controlSize(.mini).frame(width: 10, height: 10)
+                    } else if childCount > 0 {
+                        Text(childCount == 1 ? "1 subtask" : "\(childCount) subtasks")
+                            .foregroundStyle(Theme.dim)
+                    }
                     Spacer(minLength: 0)
                 }
                 .sprintFont(10.5)
@@ -544,7 +615,8 @@ private struct StoryRow: View {
             .textSelection(.enabled)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
+        .padding(.leading, depth == 0 ? 8 : 27)
+        .padding(.trailing, 8)
         .padding(.vertical, 7)
         .background(selected ? Theme.raised : hovered ? Theme.hover : Color.clear,
                     in: RoundedRectangle(cornerRadius: 8))

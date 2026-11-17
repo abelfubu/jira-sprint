@@ -6,10 +6,11 @@ A native macOS current-sprint story list using SwiftUI, AppKit, and the authenti
 
 - Fetches stories through one or more configurable JQL tabs using `acli jira workitem search`.
 - Displays story key, summary, status, assignee, and priority.
+- Nests subtasks under their real Jira parent, collapsed by default with per-query expansion state. Expanding lazily runs one parent `view` and one batched child `search`; orphan subtasks remain top-level. Re-expanding refreshes that parent, while normal sprint refresh never fans out into per-parent requests.
 - Selects row glyphs from Jira's `issuetype` icon metadata (`iconUrl`, standard universal `avatarId`, and `subtask`) rather than localized type names, using local SF Symbol equivalents for Story, Bug, Task, Sub-task, Epic, Improvement, and New Feature. Unknown custom icons use a generic document.
 - Keyboard navigation, numbered query tabs, browser opening, URL copying, and periodic refresh.
 - Keyboard- and mouse-driven actions to self-assign stories and transition their status.
-- Caches results and selection per query and preserves existing stories when a refresh fails.
+- Caches results, loaded children, expansion, and selection per query and preserves existing stories when a refresh fails.
 - Debug-only dry-run and native form smoke coverage; tests never mutate real Jira stories.
 
 ## Requirements
@@ -127,6 +128,7 @@ Bindings support `cmd`, `shift`, `alt`/`option`, and `ctrl`/`control`, plus `ent
 | `j` / `↓` | Next story |
 | `k` / `↑` | Previous story |
 | `Enter` / `o` | Open selected story in Jira |
+| `f` | Expand/collapse the selected parent's subtasks; from a child, collapse and select its parent |
 | `a` | Open actions for the selected story |
 | `y` | Copy selected story URL, or its key if no URL is available |
 | `Escape` | Close the action/status popup before clearing selection or dismissing a notice |
@@ -136,7 +138,7 @@ Bindings support `cmd`, `shift`, `alt`/`option`, and `ctrl`/`control`, plus `ent
 
 In an action or status popup, `j`/`↓` and `k`/`↑` navigate, Enter selects, and Escape cancels. **Assign to me** runs `acli jira workitem assign --assignee @me --yes`; choosing a status runs `acli jira workitem transition --status … --yes`. Both close the popup and restore story-panel focus on success. Errors leave the popup open for correction.
 
-Single-click selects a story, double-click opens it, and right-click provides open, copy, self-assignment, and status actions. The header ellipsis opens the same action menu as `a`. Clicking a query tab selects it. Displayed story text is selectable and copyable.
+Single-click selects a story, double-click opens it, and clicking a parent's chevron expands or collapses its subtasks. Right-click provides open, copy, self-assignment, and status actions. The header ellipsis opens the same action menu as `a`. Clicking a query tab selects it. Displayed story text is selectable and copyable.
 
 ## Architecture
 
@@ -144,13 +146,13 @@ Single-click selects a story, double-click opens it, and right-click provides op
 |---|---|
 | `Sources/JiraSprint/JiraSprintApp.swift` | App scene, window sizing, native menu commands, test entry point |
 | `Sources/JiraSprint/ContentView.swift` | Native UI, action/status popups, keyboard handling, focus, native smoke tests and screenshots |
-| `Sources/JiraSprint/SprintStore.swift` | Query caches, selection, refresh coordination, action state, and the single dry-run mutation boundary |
-| `Sources/JiraSprint/JiraClient.swift` | `acli` discovery/execution, assignment and transition commands, tolerant Jira JSON decoding |
-| `Sources/JiraSprint/Models.swift` | Story model and default sprint JQL |
+| `Sources/JiraSprint/SprintStore.swift` | Query/child caches, expansion, selection, refresh coordination, action state, and the single dry-run mutation boundary |
+| `Sources/JiraSprint/JiraClient.swift` | `acli` discovery/execution, lazy parent/child reads, assignment and transition commands, tolerant Jira JSON decoding |
+| `Sources/JiraSprint/Models.swift` | Story model, pure hierarchy construction, and default sprint JQL |
 | `Sources/JiraSprint/Config.swift` | Config validation, persistence, and defaults |
 | `Sources/JiraSprint/Shortcuts.swift` | Shortcut parsing, matching, menu equivalents, and hints |
 | `Sources/JiraSprint/Theme.swift` | Palette and typography |
-| `Sources/JiraSprint/SelfTests.swift` | Deterministic config, decoding, color, and shortcut tests |
+| `Sources/JiraSprint/SelfTests.swift` | Deterministic config, decoding, hierarchy, color, and shortcut tests |
 | `scripts/build-app.sh` | Release build, icon installation, app bundle creation, and ad-hoc signing |
 | `scripts/build-icon.sh` | Regenerates the complete macOS icon set from `Assets/AppIcon.svg` |
 
@@ -175,7 +177,7 @@ JIRA_SPRINT_WIDTH=480 JIRA_SPRINT_HEIGHT=760 \
 .build/debug/JiraSprint
 ```
 
-Add `JIRA_SPRINT_FORM=actions` or `JIRA_SPRINT_FORM=status` to capture either popup. Add `JIRA_SPRINT_LIVE=1` to capture real Jira results instead of fixtures. `JIRA_SPRINT_FIXTURE=1 swift run` runs the UI with the same sample stories and without network access. Fixture, keyboard/form-smoke, self-test, dry-run, and live/fixture screenshot hooks are excluded from release builds.
+Add `JIRA_SPRINT_FORM=actions` or `JIRA_SPRINT_FORM=status` to capture either popup. Add `JIRA_SPRINT_EXPAND=NOM-241` to expand the fixture parent. Add `JIRA_SPRINT_LIVE=1` to capture real Jira results instead of fixtures; `JIRA_SPRINT_EXPAND=ITA-565` (or another visible parent key) also exercises live lazy child loading. `JIRA_SPRINT_FIXTURE=1 swift run` runs the UI with the same sample stories and without network access. Fixture, keyboard/form-smoke, self-test, dry-run, and live/fixture screenshot hooks are excluded from release builds.
 
 ## Troubleshooting
 

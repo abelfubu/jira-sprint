@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class SprintStore: ObservableObject {
-    @Published private(set) var stories: [Story] = []
+    @Published private(set) var rows: [SprintListItem] = []
     @Published private(set) var selectedStoryKey: String?
     @Published private(set) var queries = [SprintQuery(label: "Current sprint", jql: SprintConfig.defaultJQL)]
     @Published private(set) var selectedQueryIndex = 0
@@ -23,9 +23,27 @@ final class SprintStore: ObservableObject {
     private var actionTask: Task<Void, Never>?
     private var configuredStatuses = SprintConfig.defaultStatuses
     private var resultsByQuery: [Int: [Story]] = [:]
+    private var childrenByQuery: [Int: [String: [Story]]] = [:]
+    private var expandedByQuery: [Int: Set<String>] = [:]
+    private var loadedParentsByQuery: [Int: Set<String>] = [:]
+    private var loadingParentsByQuery: [Int: Set<String>] = [:]
+    private var childTasks: [String: Task<Void, Never>] = [:]
+    private var childTaskTokens: [String: UUID] = [:]
+    private var requestLimit = 100
+    private var jiraSite: String?
     private var loadedQueries: Set<Int> = []
     private var selectionByQuery: [Int: String] = [:]
     private var updatedByQuery: [Int: Date] = [:]
+
+    #if DEBUG
+    private var fixtureMode: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["JIRA_SPRINT_FIXTURE"] == "1"
+            || environment["JIRA_SPRINT_KEY_SMOKE"] == "1"
+            || environment["JIRA_SPRINT_FORM_SMOKE"] == "1"
+            || (environment["JIRA_SPRINT_SCREENSHOT"] != nil && environment["JIRA_SPRINT_LIVE"] != "1")
+    }
+    #endif
 
     init(configStore: ConfigStore = .standard) {
         self.configStore = configStore
@@ -38,15 +56,22 @@ final class SprintStore: ObservableObject {
 
     var jql: String { selectedQuery.jql }
     var selectedQuery: SprintQuery { queries[selectedQueryIndex] }
+    var stories: [Story] { rows.map(\.story) }
     var selectedStory: Story? { stories.first { $0.key == selectedStoryKey } }
+    var totalStoryCount: Int { Set(allStories.map(\.key)).count }
+    private var allStories: [Story] {
+        let children = childrenByQuery[selectedQueryIndex]?.values.flatMap { $0 } ?? []
+        return attachKnownParents(to: (resultsByQuery[selectedQueryIndex] ?? []) + children)
+    }
+    private var allCachedStories: [Story] {
+        let base = resultsByQuery.values.flatMap { $0 }
+        let children = childrenByQuery.values.flatMap { $0.values.flatMap { $0 } }
+        return attachKnownParents(to: base + children)
+    }
 
     func start() {
         #if DEBUG
-        let environment = ProcessInfo.processInfo.environment
-        if environment["JIRA_SPRINT_FIXTURE"] == "1"
-            || environment["JIRA_SPRINT_KEY_SMOKE"] == "1"
-            || environment["JIRA_SPRINT_FORM_SMOKE"] == "1"
-            || (environment["JIRA_SPRINT_SCREENSHOT"] != nil && environment["JIRA_SPRINT_LIVE"] != "1") {
+        if fixtureMode {
             loadFixtures()
             return
         }
@@ -66,6 +91,9 @@ final class SprintStore: ObservableObject {
         autoTask = nil
         refreshTask?.cancel()
         refreshTask = nil
+        childTasks.values.forEach { $0.cancel() }
+        childTasks.removeAll()
+        childTaskTokens.removeAll()
     }
 
     func refresh(preservingNotice: Bool = false) {
@@ -87,6 +115,8 @@ final class SprintStore: ObservableObject {
                 let query = self.selectedQuery
                 let limit = config.effectiveLimit
                 let site = config.effectiveSite
+                self.requestLimit = limit
+                self.jiraSite = site
                 let stories = try await Task.detached(priority: .userInitiated) {
                     let client = try JiraClient()
                     return try client.fetchStories(jql: query.jql, limit: limit, site: site)
@@ -95,11 +125,11 @@ final class SprintStore: ObservableObject {
                 self.loadedQueries.insert(queryIndex)
                 self.updatedByQuery[queryIndex] = Date()
                 if self.selectedQueryIndex == queryIndex {
-                    self.stories = stories
+                    self.rebuildRows()
                     self.errorMessage = nil
                     self.lastUpdated = self.updatedByQuery[queryIndex]
-                    self.ensureSelection()
                 }
+
             } catch {
                 if requestedIndex == nil || requestedIndex == self.selectedQueryIndex {
                     self.errorMessage = error.localizedDescription
@@ -119,12 +149,11 @@ final class SprintStore: ObservableObject {
         guard queries.indices.contains(index), index != selectedQueryIndex else { return }
         selectionByQuery[selectedQueryIndex] = selectedStoryKey
         selectedQueryIndex = index
-        stories = resultsByQuery[index] ?? []
         selectedStoryKey = selectionByQuery[index]
         lastUpdated = updatedByQuery[index]
         errorMessage = nil
         notice = nil
-        ensureSelection()
+        rebuildRows()
         if !loadedQueries.contains(index), refreshTask == nil { refresh() }
     }
 
@@ -160,6 +189,7 @@ final class SprintStore: ObservableObject {
         case .tab8: selectQuery(7)
         case .tab9: selectQuery(8)
         case .openSelected: openSelected()
+        case .fold: toggleFold()
         case .actions: showActions()
         case .cancel:
             if activeForm != nil {
@@ -199,12 +229,12 @@ final class SprintStore: ObservableObject {
     var statusChoices: [String] {
         guard let story = actionStory ?? selectedStory else { return [] }
         return SprintConfig.statusChoices(configured: configuredStatuses,
-                                          available: resultsByQuery.values.flatMap { $0.map(\.status) },
+                                          available: allCachedStories.map(\.status),
                                           current: story.status)
     }
 
     func jiraColorName(for status: String) -> String? {
-        resultsByQuery.values.flatMap { $0 }
+        allCachedStories
             .first { $0.status.caseInsensitiveCompare(status) == .orderedSame }?.statusColorName
     }
 
@@ -318,15 +348,124 @@ final class SprintStore: ObservableObject {
         }
     }
 
+    func toggleFold(_ story: Story? = nil) {
+        guard let target = story ?? selectedStory else { return }
+        let queryIndex = selectedQueryIndex
+        var expanded = expandedByQuery[queryIndex] ?? []
+
+        if let parentKey = target.parentKey,
+           rows.contains(where: { $0.story.key == parentKey && $0.childCount > 0 }) {
+            expanded.remove(parentKey)
+            expandedByQuery[queryIndex] = expanded
+            updateSelection(parentKey)
+            rebuildRows()
+            return
+        }
+
+        guard let row = rows.first(where: { $0.story.key == target.key }),
+              row.showsDisclosure || row.childCount > 0 else { return }
+        let expanding = !expanded.contains(target.key)
+        if expanding { expanded.insert(target.key) } else { expanded.remove(target.key) }
+        expandedByQuery[queryIndex] = expanded
+        updateSelection(target.key)
+        rebuildRows()
+        #if DEBUG
+        let force = !fixtureMode
+        #else
+        let force = true
+        #endif
+        if expanding { loadChildren(parentKey: target.key, queryIndex: queryIndex, force: force) }
+    }
+
+    private func loadChildren(parentKey: String, queryIndex: Int, force: Bool = false) {
+        guard queries.indices.contains(queryIndex), childTasks[childTaskID(queryIndex: queryIndex, parentKey: parentKey)] == nil else { return }
+        if !force, loadedParentsByQuery[queryIndex]?.contains(parentKey) == true { return }
+        let query = queries[queryIndex]
+        let id = childTaskID(queryIndex: queryIndex, parentKey: parentKey)
+        let token = UUID()
+        childTaskTokens[id] = token
+        loadingParentsByQuery[queryIndex, default: []].insert(parentKey)
+        if selectedQueryIndex == queryIndex { rebuildRows() }
+        let limit = requestLimit
+        let site = jiraSite
+        childTasks[id] = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.childTaskTokens[id] == token {
+                    self.loadingParentsByQuery[queryIndex]?.remove(parentKey)
+                    self.childTasks[id] = nil
+                    self.childTaskTokens[id] = nil
+                }
+            }
+            do {
+                let children = try await Task.detached(priority: .userInitiated) {
+                    try JiraClient().fetchSubtasks(parentKey: parentKey, limit: limit, site: site)
+                }.value
+                guard !Task.isCancelled, self.childTaskTokens[id] == token,
+                      self.queries.indices.contains(queryIndex), self.queries[queryIndex] == query else { return }
+                self.loadingParentsByQuery[queryIndex]?.remove(parentKey)
+                self.childrenByQuery[queryIndex, default: [:]][parentKey] = children
+                self.loadedParentsByQuery[queryIndex, default: []].insert(parentKey)
+                if children.isEmpty { self.expandedByQuery[queryIndex]?.remove(parentKey) }
+                if self.selectedQueryIndex == queryIndex {
+                    if self.errorMessage?.hasPrefix("Could not load subtasks for \(parentKey):") == true {
+                        self.errorMessage = nil
+                    }
+                    self.rebuildRows()
+                }
+            } catch {
+                guard self.childTaskTokens[id] == token,
+                      self.queries.indices.contains(queryIndex), self.queries[queryIndex] == query else { return }
+                self.loadingParentsByQuery[queryIndex]?.remove(parentKey)
+                if self.selectedQueryIndex == queryIndex {
+                    self.errorMessage = "Could not load subtasks for \(parentKey): \(error.localizedDescription)"
+                    self.rebuildRows()
+                }
+            }
+        }
+    }
+
+    private func childTaskID(queryIndex: Int, parentKey: String) -> String {
+        "\(queryIndex):\(parentKey)"
+    }
+
+    private func attachKnownParents(to stories: [Story]) -> [Story] {
+        var parentByChild: [String: String] = [:]
+        for (parentKey, children) in childrenByQuery.values.flatMap({ $0 }) {
+            for child in children { parentByChild[child.key] = parentKey }
+        }
+        return stories.map { story in
+            guard story.parentKey == nil, let parentKey = parentByChild[story.key] else { return story }
+            var copy = story
+            copy.parentKey = parentKey
+            return copy
+        }
+    }
+
+    private func rebuildRows() {
+        rows = SprintHierarchy.rows(stories: allStories,
+                                    expandedParents: expandedByQuery[selectedQueryIndex] ?? [],
+                                    loadedParents: loadedParentsByQuery[selectedQueryIndex] ?? [],
+                                    loadingParents: loadingParentsByQuery[selectedQueryIndex] ?? [])
+        ensureSelection()
+    }
+
     private func applyQueries(_ newQueries: [SprintQuery]) {
         guard newQueries != queries else { return }
         queries = newQueries
         resultsByQuery.removeAll()
+        childrenByQuery.removeAll()
+        expandedByQuery.removeAll()
+        loadedParentsByQuery.removeAll()
+        loadingParentsByQuery.removeAll()
+        childTasks.values.forEach { $0.cancel() }
+        childTasks.removeAll()
+        childTaskTokens.removeAll()
         loadedQueries.removeAll()
         selectionByQuery.removeAll()
         updatedByQuery.removeAll()
         selectedQueryIndex = 0
-        stories = []
+        rows = []
         selectedStoryKey = nil
         lastUpdated = nil
     }
@@ -375,7 +514,8 @@ final class SprintStore: ObservableObject {
                   browseURL: URL(string: "https://example.atlassian.net/browse/NOM-235")),
             Story(key: "NOM-229", summary: "Validate Brazilian NDFe tax totals before submission",
                   status: "Blocked", assignee: "Marius Enache", issueType: "Sub-task",
-                  issueTypeIconURL: URL(string: "https://example.atlassian.net/images/icons/issuetypes/subtask.svg"), priority: "High",
+                  issueTypeIconURL: URL(string: "https://example.atlassian.net/images/icons/issuetypes/subtask.svg"),
+                  parentKey: "NOM-241", priority: "High",
                   browseURL: URL(string: "https://example.atlassian.net/browse/NOM-229")),
             Story(key: "NOM-218", summary: "Display SDI notification timestamps",
                   status: "Done", assignee: "Abel de la Fuente", issueType: "Epic",
@@ -384,11 +524,12 @@ final class SprintStore: ObservableObject {
         ]
         for index in queries.indices {
             resultsByQuery[index] = fixtures
+            loadedParentsByQuery[index] = ["NOM-241"]
             loadedQueries.insert(index)
             updatedByQuery[index] = Date()
         }
         selectedQueryIndex = 0
-        stories = fixtures
+        rebuildRows()
         updateSelection(fixtures[0].key)
         lastUpdated = Date()
         errorMessage = nil

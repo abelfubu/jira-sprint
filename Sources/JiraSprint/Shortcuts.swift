@@ -3,7 +3,7 @@ import SwiftUI
 enum ShortcutAction: String, CaseIterable, Codable, Sendable {
     case nextStory, previousStory, nextQuery, previousQuery
     case tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9
-    case openSelected, actions, cancel, refresh, copy, openConfig, closeWindow
+    case openSelected, fold, actions, cancel, refresh, copy, openConfig, closeWindow
 
     static let globalCases = allCases
 }
@@ -111,7 +111,7 @@ struct ShortcutMap: Sendable {
         .nextQuery: ["l", "]"], .previousQuery: ["h", "["],
         .tab1: ["1"], .tab2: ["2"], .tab3: ["3"], .tab4: ["4"], .tab5: ["5"],
         .tab6: ["6"], .tab7: ["7"], .tab8: ["8"], .tab9: ["9"],
-        .openSelected: ["enter", "o", "cmd-enter"], .actions: ["a"], .cancel: ["escape"],
+        .openSelected: ["enter", "o", "cmd-enter"], .fold: ["f"], .actions: ["a"], .cancel: ["escape"],
         .refresh: ["r", "cmd-r"], .copy: ["y"],
         .openConfig: ["cmd-shift-o"], .closeWindow: ["cmd-w"],
     ]
